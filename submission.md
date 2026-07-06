@@ -120,4 +120,31 @@ A consistent architecture is used: routes do request/response concerns while ser
   - Re-ran relevant existing tests to ensure rating persistence behavior remains intact.
 
 ### 4) Issue #2 - Friends Listening Now shows people from yesterday
-(To be completed with full 5-field RCA in the commit for Issue #2.)
+1. Issue number and title
+- Issue #2 - Friends Listening Now shows people from yesterday
+
+2. How I reproduced it
+- Reproduced in a controlled app-context script before fixing:
+  - Created a viewer and a friend relationship.
+  - Inserted a `ListeningEvent` for the friend at `now - 23 hours`.
+  - Called `get_friends_listening_now(viewer_id)`.
+- Observed pre-fix behavior: feed count was `1` even though the activity was from yesterday.
+
+3. How I found the root cause
+- Navigation path: `routes/feed.py` listening-now endpoint -> `services/feed_service.py:get_friends_listening_now()`.
+- Confidence point: `RECENT_THRESHOLD` was hardcoded to `timedelta(hours=24)`, which semantically includes yesterday events and conflicts with a "listening now" feed expectation.
+
+4. The root cause
+- The recency window was too broad (`24` hours).
+- Any event from the prior day but still within the last day was treated as "now", so stale activity leaked into the live feed.
+
+5. Your fix and side-effect check
+- Fix:
+  - Changed `RECENT_THRESHOLD` from `24 hours` to `30 minutes`.
+  - Added `tests/test_feed.py` regression coverage:
+    - `test_listening_now_excludes_yesterday_activity`
+    - `test_listening_now_includes_recent_activity`
+- Why it works: the feed now uses a short real-time window aligned with "listening now" intent.
+- Side-effect checks:
+  - Confirmed very recent events are still returned.
+  - Confirmed older events no longer appear in listening-now results.
