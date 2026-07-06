@@ -63,7 +63,29 @@ A consistent architecture is used: routes do request/response concerns while ser
   - Verified Sunday case now increments.
 
 ### 2) Issue #5 - The last song in a playlist never shows up
-(To be completed with full 5-field RCA in the commit for Issue #5.)
+1. Issue number and title
+- Issue #5 - The last song in a playlist never shows up
+
+2. How I reproduced it
+- Reproduced with existing tests:
+  - `tests/test_playlists.py::test_playlist_returns_all_songs`
+  - `tests/test_playlists.py::test_playlist_returns_songs_in_order`
+- Observed pre-fix behavior: playlist returned 4 songs instead of 5 and was missing the final track.
+
+3. How I found the root cause
+- Navigation path: `GET /playlists/<playlist_id>/songs` in `routes/playlists.py` -> `get_playlist_songs()` in `services/playlist_service.py`.
+- The confidence point was the final return expression using `songs[:-1]`, which always drops the last list item.
+
+4. The root cause
+- The function intentionally (but incorrectly) slices the query result with `[:-1]` before serializing.
+- Because Python slicing excludes the last element in that form, every playlist response omits the final song regardless of playlist size.
+
+5. Your fix and side-effect check
+- Fix: changed return logic from iterating `songs[:-1]` to iterating all `songs`.
+- Why it works: it returns the complete ordered query result without truncation.
+- Side-effect checks:
+  - Ran playlist tests for total count, ordering, and empty-playlist behavior.
+  - Confirmed order remains position-based while now including the last track.
 
 ### 3) Issue #4 - Playlist notification works, rating notification missing
 (To be completed with full 5-field RCA in the commit for Issue #4.)
