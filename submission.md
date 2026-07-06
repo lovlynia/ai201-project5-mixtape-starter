@@ -88,7 +88,36 @@ A consistent architecture is used: routes do request/response concerns while ser
   - Confirmed order remains position-based while now including the last track.
 
 ### 3) Issue #4 - Playlist notification works, rating notification missing
-(To be completed with full 5-field RCA in the commit for Issue #4.)
+1. Issue number and title
+- Issue #4 - I got notified when a friend added my song to a playlist but not when they rated it
+
+2. How I reproduced it
+- Reproduced in an app-context script before fixing:
+  - Created `owner`, `friend`, and a song shared by `owner`.
+  - Called `rate_song(friend.id, song.id, 4)`.
+  - Queried `Notification` rows for `owner`.
+- Observed pre-fix behavior: notification count was `0`.
+
+3. How I found the root cause
+- Navigation path: `routes/songs.py` rating endpoint -> `services/notification_service.py:rate_song()`.
+- Compared this code path line-by-line with `add_to_playlist()`, which already creates notifications.
+- Confidence point: `rate_song()` validated and saved ratings but had no notification side effect at all.
+
+4. The root cause
+- Architectural omission: the rating workflow persisted a `Rating` record but never invoked notification creation for the original song sharer.
+- As a result, playlist-add events generated notifications while rating events did not, despite similar product expectations.
+
+5. Your fix and side-effect check
+- Fix:
+  - Added notification creation in `rate_song()` after rating commit.
+  - Notification is only created when `song.shared_by != user_id` to avoid self-notifications.
+  - Added regression tests in `tests/test_notifications.py`:
+    - verifies notification is created for non-owner rater,
+    - verifies no notification for self-rating.
+- Why it works: the missing side effect now mirrors the existing notification pattern used in other interaction workflows.
+- Side-effect checks:
+  - Ran new notification tests.
+  - Re-ran relevant existing tests to ensure rating persistence behavior remains intact.
 
 ### 4) Issue #2 - Friends Listening Now shows people from yesterday
 (To be completed with full 5-field RCA in the commit for Issue #2.)
